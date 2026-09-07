@@ -20,6 +20,9 @@ const RESPONSE_PREFIX = 'responses/';
 const BACKUP_PREFIX = 'backups/';
 const TOMBSTONE_PREFIX = 'deleted/';
 const LOCAL_TOMBSTONES_FILE = path.join(LOCAL_DATA_DIR, 'deleted-ids.json');
+const LOCAL_MAINTENANCE_FILE = path.join(LOCAL_DATA_DIR, 'maintenance.json');
+const MAINTENANCE_PATH = 'system/maintenance.json';
+let maintenanceCache = { value: null, expiresAt: 0 };
 let localWriteChain = Promise.resolve();
 let blobSdkPromise = null;
 
@@ -143,6 +146,62 @@ async function readBlobJson(pathname) {
   if (!result) return null;
   const text = await new Response(result.stream).text();
   return JSON.parse(text);
+}
+
+
+
+async function readMaintenanceState({ force = false } = {}) {
+  if (!force && maintenanceCache.value && Date.now() < maintenanceCache.expiresAt) return maintenanceCache.value;
+  const defaults = { enabled: false, forced: false, updatedAt: null, reason: '', message: '' };
+  if (!IS_VERCEL) {
+    try {
+      const parsed = JSON.parse(await fsp.readFile(LOCAL_MAINTENANCE_FILE, 'utf8'));
+      const value = { ...defaults, ...parsed, enabled: Boolean(parsed.enabled), forced: false };
+      maintenanceCache = { value, expiresAt: Date.now() + 5000 };
+      return value;
+    } catch (_) {
+      maintenanceCache = { value: defaults, expiresAt: Date.now() + 5000 };
+      return defaults;
+    }
+  }
+  try {
+    const parsed = await readBlobJson(MAINTENANCE_PATH);
+    const value = parsed ? { ...defaults, ...parsed, enabled: Boolean(parsed.enabled), forced: false } : defaults;
+    maintenanceCache = { value, expiresAt: Date.now() + 15000 };
+    return value;
+  } catch (error) {
+    // Veilig gedrag: als de permanente opslag niet leesbaar is, nemen we geen nieuwe antwoorden aan.
+    const value = {
+      enabled: true,
+      forced: true,
+      updatedAt: new Date().toISOString(),
+      reason: 'storage-unavailable',
+      message: 'De opslag is tijdelijk niet beschikbaar. Daarom staat de vragenlijst automatisch in onderhoudsmodus.'
+    };
+    maintenanceCache = { value, expiresAt: Date.now() + 10000 };
+    return value;
+  }
+}
+
+async function writeMaintenanceState(enabled) {
+  const state = {
+    enabled: Boolean(enabled),
+    forced: false,
+    updatedAt: new Date().toISOString(),
+    reason: 'admin',
+    message: Boolean(enabled) ? 'Handmatig aangezet via het adminpaneel.' : 'Handmatig uitgezet via het adminpaneel.'
+  };
+  if (!IS_VERCEL) {
+    await fsp.mkdir(LOCAL_DATA_DIR, { recursive: true });
+    await fsp.writeFile(LOCAL_MAINTENANCE_FILE, JSON.stringify(state, null, 2) + '\n', 'utf8');
+  } else {
+    const { put } = await getBlobSdk();
+    await put(MAINTENANCE_PATH, JSON.stringify(state, null, 2), blobAuthOptions({
+      access: 'private', contentType: 'application/json', addRandomSuffix: false, allowOverwrite: true
+    }));
+  }
+  maintenanceCache = { value: state, expiresAt: Date.now() + 15000 };
+  return state;
 }
 
 async function listBlobObjects(prefix) {
@@ -412,10 +471,26 @@ function sanitizeDevice(value, req) {
 app.disable('x-powered-by');
 app.use(express.json({ limit: '200kb' }));
 app.use(express.urlencoded({ extended: false }));
+
+// Publieke statuscheck. Clear-Site-Data wist site-eigen cookies/opslag zodra een leerling de site bezoekt.
+app.get('/api/site-status', async (_req, res) => {
+  try {
+    const state = await readMaintenanceState();
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Clear-Site-Data', '\"cookies\", \"storage\"');
+    res.json({ maintenance: Boolean(state.enabled), forced: Boolean(state.forced), updatedAt: state.updatedAt, reason: state.reason || '' });
+  } catch (_) {
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ maintenance: true, forced: true, reason: 'status-error' });
+  }
+});
+
 app.use(express.static(PUBLIC_DIR, { extensions: ['html'] }));
 
 app.post('/api/submit', async (req, res) => {
   try {
+    const maintenance = await readMaintenanceState();
+    if (maintenance.enabled) return res.status(503).json({ error: 'De site is momenteel in onderhoud. Vul de vragenlijst later opnieuw in.' });
     const body = req.body || {};
     const name = sanitizeText(body.name, 80);
     const className = sanitizeText(body.className, 40);
@@ -481,6 +556,24 @@ app.get('/api/admin/me', (req, res) => {
     adminPasswordConfigured: Boolean(getAdminPassword()),
     storageMode: IS_VERCEL ? 'Vercel Private Blob' : 'Lokale JSON'
   });
+});
+
+app.get('/api/admin/maintenance', requireAdmin, async (_req, res) => {
+  try { res.json(await readMaintenanceState({ force: true })); }
+  catch (error) { res.status(503).json({ error: error.message || 'Onderhoudsstatus laden mislukt.' }); }
+});
+
+app.post('/api/admin/maintenance', requireAdmin, async (req, res) => {
+  try {
+    const current = await readMaintenanceState({ force: true });
+    if (current.forced && req.body?.enabled === false) {
+      return res.status(503).json({ error: 'Onderhoud kan nu niet worden uitgezet omdat de permanente opslag niet bereikbaar is. Dit beschermt nieuwe antwoorden tegen verlies.' });
+    }
+    const state = await writeMaintenanceState(Boolean(req.body?.enabled));
+    res.json({ ok: true, ...state });
+  } catch (error) {
+    res.status(503).json({ error: error.message || 'Onderhoudsmodus wijzigen mislukt.' });
+  }
 });
 
 app.get('/api/admin/results', requireAdmin, async (req, res) => {

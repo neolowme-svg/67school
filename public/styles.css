@@ -183,3 +183,21 @@ td{font-size:.86rem;color:var(--ink-soft)}
 /* Admin live-update refinements */
 .live-wrap{display:flex;align-items:center;gap:10px;white-space:nowrap}.live-wrap small{color:#667085;font-size:12px}.device-details{min-width:240px}.device-details[open]{position:relative}.device-details summary{cursor:pointer;user-select:none}.danger-btn{border:1px solid #e6b8b8;background:#fff;color:#9b1c1c;border-radius:10px;padding:8px 11px;font:inherit;font-size:12px;font-weight:700;cursor:pointer;transition:.18s ease}.danger-btn:hover{background:#fff5f5;transform:translateY(-1px)}.danger-btn:disabled{opacity:.5;cursor:wait}.backup-panel{overflow:hidden}.backup-list{display:grid;gap:10px;max-height:340px;overflow:auto;padding-right:4px}.backup-item{display:flex;align-items:center;justify-content:space-between;gap:16px;border:1px solid #e8ebef;border-radius:14px;padding:12px 14px;background:#fff}.backup-item>div{display:grid;gap:2px;min-width:0}.backup-item b{font-size:14px}.backup-item small{color:#667085;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:520px}.mini-count{display:inline-grid;place-items:center;min-width:28px;height:28px;padding:0 8px;border-radius:999px;background:#eef2f6;font-size:13px;vertical-align:middle}.panel-copy{margin:6px 0 0;color:#667085;max-width:680px}.table-wrap{scrollbar-gutter:stable}.responses-panel table{table-layout:auto}.responses-panel tbody tr{animation:rowIn .22s ease both}.responses-panel tbody tr:hover{background:#fafbfc}@keyframes rowIn{from{opacity:.65;transform:translateY(2px)}to{opacity:1;transform:none}}
 @media(max-width:800px){.backup-item{align-items:flex-start;flex-direction:column}.backup-item small{max-width:78vw}.live-wrap small{display:none}}
+
+
+/* Maintenance mode */
+.maintenance-view{min-height:100vh;display:grid;place-items:center;padding:28px;background:#f7f8fb;position:relative;z-index:9999}
+.maintenance-card{width:min(720px,100%);background:#fff;border:1px solid var(--line);border-radius:28px;padding:clamp(28px,5vw,54px);box-shadow:var(--shadow-lg);text-align:center;animation:screenIn .5s ease}
+.maintenance-logo{width:min(230px,70%);height:110px;object-fit:contain;margin-bottom:8px}
+.maintenance-icon{width:72px;height:72px;margin:4px auto 18px;border-radius:22px;display:grid;place-items:center;font-size:34px;background:var(--brand-soft);border:1px solid #d6e5f5}
+.maintenance-card h1{font-size:clamp(2rem,5vw,3.4rem);line-height:1.02;letter-spacing:-.05em;margin:.25rem 0 1rem}
+.maintenance-lead{color:var(--ink-soft);font-size:1.08rem;line-height:1.7;max-width:610px;margin:0 auto 24px}
+.maintenance-note{text-align:left;background:#f7f9fc;border:1px solid var(--line);border-radius:18px;padding:20px 22px;margin:22px 0;color:var(--ink-soft);line-height:1.65}
+.maintenance-note strong{display:block;color:var(--ink);font-size:1.05rem;margin-bottom:6px}.maintenance-note p{margin:8px 0}.maintenance-card>small{color:var(--muted)}
+.maintenance-active body{background:#f7f8fb}.maintenance-active #confetti{display:none}
+.maintenance-admin{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-top:18px;border-left:4px solid var(--line-strong)}
+.maintenance-admin-copy h2{margin:0 0 7px}.maintenance-admin-copy>p:not(.eyebrow){color:var(--muted);margin:0 0 12px;max-width:760px;line-height:1.55}
+.maintenance-status{display:inline-flex;align-items:center;gap:8px;font-weight:800;font-size:.88rem;padding:8px 11px;border-radius:999px;background:#eef2f6;color:var(--ink-soft)}
+.maintenance-status.is-on{background:#fff1f2;color:#9f1239;border:1px solid #fecdd3}.maintenance-status.is-off{background:#edf7f2;color:var(--success);border:1px solid #cfe9dc}
+.maintenance-toggle{border:0;border-radius:14px;padding:14px 18px;font-weight:900;cursor:pointer;min-width:190px;transition:.2s ease}.maintenance-toggle.is-off{background:#fff1f2;color:#9f1239;border:1px solid #fecdd3}.maintenance-toggle.is-on{background:#edf7f2;color:var(--success);border:1px solid #cfe9dc}.maintenance-toggle:disabled{opacity:.6;cursor:not-allowed}
+@media(max-width:760px){.maintenance-admin{align-items:stretch;flex-direction:column}.maintenance-toggle{width:100%}.maintenance-card{border-radius:22px;padding:28px 20px}.maintenance-note{padding:17px}}

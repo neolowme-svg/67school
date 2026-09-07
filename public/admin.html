@@ -33,6 +33,16 @@
 
       <div id="passwordWarning" class="warning hidden">⚠️ <code>ADMIN_PASSWORD</code> is niet ingesteld op deze deployment. Stel hem in bij Vercel Environment Variables en redeploy.</div>
 
+      <section class="maintenance-admin panel glass">
+        <div class="maintenance-admin-copy">
+          <p class="eyebrow">Website status</p>
+          <h2>Onderhoudsmodus</h2>
+          <p id="maintenanceHelp">Als onderhoud aan staat, kunnen leerlingen de vragenlijst niet invullen en zien ze een duidelijke onderhoudsmelding.</p>
+          <div id="maintenanceStatus" class="maintenance-status">Status laden…</div>
+        </div>
+        <button id="maintenanceToggle" class="maintenance-toggle" type="button" disabled>Onderhoud laden…</button>
+      </section>
+
       <section class="stats-grid">
         <article class="stat-card glass"><span>Totaal reacties</span><strong id="totalCount">0</strong><small id="filteredCount">0 zichtbaar</small></article>
         <article class="stat-card glass"><span>Vandaag</span><strong id="todayCount">0</strong><small>nieuwe reacties</small></article>

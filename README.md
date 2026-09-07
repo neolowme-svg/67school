@@ -1,25 +1,14 @@
-# 67school – Walewyc Mavo schoolfeest
+# 67school – maintenance versie
 
-Deze versie gebruikt Vercel Private Blob voor permanente inzendingen en back-ups.
+Deze versie voegt toe:
+- Onderhoudsmodus in `/admin`.
+- Automatische veilige onderhoudsmodus wanneer Vercel Blob niet bereikbaar is.
+- Publieke onderhoudspagina met duidelijke tekst voor klas 1 en 2.
+- Nieuwe inzendingen worden tijdens onderhoud server-side geblokkeerd.
+- Oude site-eigen cookies, localStorage en sessionStorage worden bij een publiek bezoek gewist.
+- De oude browser-ID wordt niet meer aangemaakt.
 
-Belangrijkste wijzigingen:
-- Admin pollt elke 1 seconde zonder de pagina volledig opnieuw te renderen.
-- Opengeklapte apparaatdetails blijven open tijdens live updates.
-- Reacties kunnen veilig worden verwijderd; vooraf wordt automatisch een back-up gemaakt.
-- Back-upcentrum: handmatige back-up, lijst van back-ups, individuele download en alle back-ups als één JSON-bundel.
-- De meegeleverde `data/seed-responses.json` bevat de 5 oude inzendingen uit `67school-resultaten.csv` en wordt bij de eerste Vercel-run automatisch aan Blob toegevoegd als die IDs nog niet bestaan.
-- Een verwijderde oude seed-reactie blijft verwijderd via een tombstone-record.
-- Browser/apparaatinfo blijft zichtbaar in admin voor zover browsers die informatie beschikbaar stellen.
+## Belangrijk
+De onderhoudsstatus wordt op Vercel in dezelfde Private Blob store bewaard (`system/maintenance.json`). Als de Blob store door een limiet niet bereikbaar is, zet de site zichzelf automatisch in onderhoud. Onderhoud kan dan niet worden uitgezet totdat de opslag weer veilig bereikbaar is.
 
-## Deploy
-
-1. Zorg dat het Vercel-project aan een Private Blob store gekoppeld is.
-2. Zorg dat `ADMIN_PASSWORD` als Production environment variable bestaat.
-3. Push naar GitHub; Vercel deployt automatisch.
-
-## Lokale start
-
-```powershell
-npm.cmd install
-npm.cmd start
-```
+Een website kan cookies van andere websites niet wissen en kan cookies van bezoekers pas wissen wanneer zij 67school.site opnieuw bezoeken.
