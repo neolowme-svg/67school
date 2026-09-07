@@ -27,8 +27,8 @@
     <section id="dashboard" class="dashboard hidden">
       <header class="admin-header glass">
         <div class="admin-brand"><img src="/assets/logo.png" alt="67school" /><div><b>67school</b><span>Live resultaten</span></div></div>
-        <div class="live-pill"><i></i> LIVE</div>
-        <div class="header-actions"><a class="ghost small-btn" href="/api/admin/export.csv">CSV export</a><a class="ghost small-btn" href="/api/admin/export.json">JSON export</a><label class="ghost small-btn" for="csvImport" style="cursor:pointer">CSV import</label><input id="csvImport" type="file" accept=".csv,text/csv" hidden><label class="ghost small-btn" for="jsonImport" style="cursor:pointer">JSON import</label><input id="jsonImport" type="file" accept=".json,application/json" hidden><button id="backupNow" class="ghost small-btn">Nu back-uppen</button><button id="logout" class="ghost small-btn">Uitloggen</button></div>
+        <div class="live-wrap"><div class="live-pill"><i></i> LIVE</div><small id="lastSync">Bijwerken…</small></div>
+        <div class="header-actions"><a class="ghost small-btn" href="/api/admin/export.csv">CSV export</a><a class="ghost small-btn" href="/api/admin/export.json">JSON export</a><label class="ghost small-btn" for="csvImport" style="cursor:pointer">CSV import</label><input id="csvImport" type="file" accept=".csv,text/csv" hidden><label class="ghost small-btn" for="jsonImport" style="cursor:pointer">JSON import</label><input id="jsonImport" type="file" accept=".json,application/json" hidden><button id="logout" class="ghost small-btn">Uitloggen</button></div>
       </header>
 
       <div id="passwordWarning" class="warning hidden">⚠️ <code>ADMIN_PASSWORD</code> is niet ingesteld op deze deployment. Stel hem in bij Vercel Environment Variables en redeploy.</div>
@@ -55,9 +55,14 @@
         <article class="panel glass"><div class="panel-title"><div><p class="eyebrow">Klassen</p><h2>Reacties per klas</h2></div></div><div id="classChart" class="bar-chart"></div></article>
       </section>
 
+      <section class="panel glass backup-panel">
+        <div class="panel-title responsive"><div><p class="eyebrow">Back-ups</p><h2>Back-upcentrum <span id="backupCountInline" class="mini-count">0</span></h2><p class="panel-copy">Bekijk en download eerdere snapshots. Vóór het verwijderen van een reactie wordt automatisch eerst een back-up gemaakt.</p></div><div class="header-actions"><button id="backupNow" class="primary small-btn">Nieuwe back-up</button><a class="ghost small-btn" href="/api/admin/backups-download-all">Download alle back-ups</a></div></div>
+        <div id="backupList" class="backup-list"><div class="empty">Back-ups laden…</div></div>
+      </section>
+
       <section class="panel glass responses-panel">
         <div class="panel-title responsive"><div><p class="eyebrow">Inzendingen</p><h2>Alle reacties</h2></div><div class="filters"><input id="search" placeholder="Zoek op naam, klas, idee of apparaatinfo…" /><select id="classFilter"><option value="">Alle klassen</option></select></div></div>
-        <div class="table-wrap"><table><thead><tr><th>Naam</th><th>Klas</th><th>Activiteiten</th><th>Eten</th><th>Idee</th><th>Apparaatinfo</th><th>Datum</th></tr></thead><tbody id="resultRows"></tbody></table></div>
+        <div class="table-wrap"><table><thead><tr><th>Naam</th><th>Klas</th><th>Activiteiten</th><th>Eten</th><th>Idee</th><th>Apparaatinfo</th><th>Datum</th><th>Acties</th></tr></thead><tbody id="resultRows"></tbody></table></div>
         <div id="emptyState" class="empty hidden">Nog geen resultaten gevonden.</div>
       </section>
     </section>

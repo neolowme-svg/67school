@@ -15,8 +15,11 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const LOCAL_DATA_DIR = path.join(__dirname, 'data');
 const LOCAL_DATA_FILE = path.join(LOCAL_DATA_DIR, 'responses.json');
 const LOCAL_BACKUP_DIR = path.join(LOCAL_DATA_DIR, 'backups');
+const SEED_FILE = path.join(LOCAL_DATA_DIR, 'seed-responses.json');
 const RESPONSE_PREFIX = 'responses/';
 const BACKUP_PREFIX = 'backups/';
+const TOMBSTONE_PREFIX = 'deleted/';
+const LOCAL_TOMBSTONES_FILE = path.join(LOCAL_DATA_DIR, 'deleted-ids.json');
 let localWriteChain = Promise.resolve();
 let blobSdkPromise = null;
 
@@ -159,8 +162,65 @@ async function readBlobResponses() {
   return rows;
 }
 
+
+async function readSeedResponses() {
+  try {
+    const parsed = JSON.parse(await fsp.readFile(SEED_FILE, 'utf8'));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) { return []; }
+}
+
+async function readLocalTombstones() {
+  try {
+    const parsed = JSON.parse(await fsp.readFile(LOCAL_TOMBSTONES_FILE, 'utf8'));
+    return new Set(Array.isArray(parsed) ? parsed : []);
+  } catch (_) { return new Set(); }
+}
+
+async function addTombstone(id) {
+  if (!IS_VERCEL) {
+    const set = await readLocalTombstones(); set.add(id);
+    await fsp.mkdir(LOCAL_DATA_DIR,{recursive:true});
+    await fsp.writeFile(LOCAL_TOMBSTONES_FILE, JSON.stringify([...set], null, 2)+'\n','utf8');
+    return;
+  }
+  const { put } = await getBlobSdk();
+  await put(`${TOMBSTONE_PREFIX}${id}.json`, JSON.stringify({id,deletedAt:new Date().toISOString()}), {access:'private',contentType:'application/json',addRandomSuffix:false,allowOverwrite:true});
+}
+
+async function ensureSeedResponses() {
+  const seeds = await readSeedResponses();
+  if (!seeds.length) return 0;
+  if (!IS_VERCEL) {
+    const current = await readLocalResponses();
+    const ids = new Set(current.map(r => r.id));
+    const deleted = await readLocalTombstones();
+    const missing = seeds.filter(r => !ids.has(r.id) && !deleted.has(r.id));
+    if (missing.length) await writeLocalResponses([...current, ...missing]);
+    return missing.length;
+  }
+  const [blobs, tombstones] = await Promise.all([listBlobObjects(RESPONSE_PREFIX), listBlobObjects(TOMBSTONE_PREFIX)]);
+  const existingIds = new Set(blobs.map(b => { const m = b.pathname.match(/_([^_\/]+)\.json$/); return m ? m[1] : ''; }));
+  const deletedIds = new Set(tombstones.map(b => path.basename(b.pathname,'.json')));
+  let added = 0;
+  const { put } = await getBlobSdk();
+  for (const record of seeds) {
+    if (existingIds.has(record.id) || deletedIds.has(record.id)) continue;
+    const safeTime = String(record.createdAt || new Date().toISOString()).replace(/[:.]/g, '-');
+    const pathname = `${RESPONSE_PREFIX}${safeTime}_${record.id}.json`;
+    await put(pathname, JSON.stringify(record, null, 2), { access: 'private', contentType: 'application/json', addRandomSuffix: false });
+    added++;
+  }
+  if (added) {
+    const legacyBackup = { version:1, createdAt:new Date().toISOString(), reason:'hersteld-uit-67school-resultaten.csv', count:seeds.length, responses:seeds };
+    await put(`${BACKUP_PREFIX}legacy-import.json`, JSON.stringify(legacyBackup, null, 2), { access:'private', contentType:'application/json', addRandomSuffix:false, allowOverwrite:true });
+  }
+  return added;
+}
+
 async function readResponses() {
-  if (!IS_VERCEL) return readLocalResponses();
+  if (!IS_VERCEL) { await ensureSeedResponses(); return readLocalResponses(); }
+  await ensureSeedResponses();
   try {
     return await readBlobResponses();
   } catch (error) {
@@ -189,6 +249,50 @@ async function saveResponse(record) {
     console.error('Vercel Blob opslaan mislukt:', error);
     throw new Error('Opslaan is mislukt. Je antwoord is NIET bewaard; probeer opnieuw of meld dit bij de organisatie.');
   }
+}
+
+async function deleteResponseById(id) {
+  if (!IS_VERCEL) {
+    const rows = await readLocalResponses();
+    const next = rows.filter(r => r.id !== id);
+    if (next.length === rows.length) return false;
+    await writeLocalResponses(next);
+    await addTombstone(id);
+    return true;
+  }
+  const { del } = await getBlobSdk();
+  const blobs = await listBlobObjects(RESPONSE_PREFIX);
+  const target = blobs.find(b => b.pathname.endsWith(`_${id}.json`));
+  if (!target) return false;
+  await del(target.url || target.pathname);
+  await addTombstone(id);
+  return true;
+}
+
+async function listBackups() {
+  if (!IS_VERCEL) {
+    try {
+      const names = (await fsp.readdir(LOCAL_BACKUP_DIR)).filter(n => n.endsWith('.json') && n !== 'latest.json').sort().reverse();
+      return Promise.all(names.map(async name => {
+        const st = await fsp.stat(path.join(LOCAL_BACKUP_DIR, name));
+        return { id: name, pathname: `data/backups/${name}`, createdAt: st.mtime.toISOString(), size: st.size };
+      }));
+    } catch { return []; }
+  }
+  const blobs = await listBlobObjects(BACKUP_PREFIX);
+  return blobs.filter(b => b.pathname !== `${BACKUP_PREFIX}latest.json`).sort((a,b)=>new Date(b.uploadedAt||0)-new Date(a.uploadedAt||0)).map(b=>({
+    id: Buffer.from(b.pathname).toString('base64url'), pathname:b.pathname, createdAt:b.uploadedAt, size:b.size
+  }));
+}
+
+async function readBackupById(id) {
+  if (!IS_VERCEL) {
+    const safe = path.basename(String(id));
+    return JSON.parse(await fsp.readFile(path.join(LOCAL_BACKUP_DIR, safe), 'utf8'));
+  }
+  const pathname = Buffer.from(String(id), 'base64url').toString('utf8');
+  if (!pathname.startsWith(BACKUP_PREFIX)) throw new Error('Ongeldige backup.');
+  return readBlobJson(pathname);
 }
 
 async function responseIdExists(id) {
@@ -416,6 +520,43 @@ app.get('/api/cron/backup', async (req, res) => {
   if (!safeEqual(auth, `Bearer ${secret}`)) return res.status(401).json({ error: 'Niet toegestaan.' });
   try { res.json({ ok: true, backup: await createBackup('vercel-cron-15m') }); }
   catch (error) { res.status(503).json({ error: error.message || 'Backup mislukt.' }); }
+});
+
+app.delete('/api/admin/results/:id', requireAdmin, async (req, res) => {
+  try {
+    const id = sanitizeText(req.params.id, 120);
+    await createBackup('before-delete');
+    const deleted = await deleteResponseById(id);
+    if (!deleted) return res.status(404).json({ error: 'Reactie niet gevonden.' });
+    res.json({ ok: true });
+  } catch (error) { res.status(503).json({ error: error.message || 'Verwijderen mislukt.' }); }
+});
+
+app.get('/api/admin/backups', requireAdmin, async (_req, res) => {
+  try { res.json({ backups: await listBackups() }); }
+  catch (error) { res.status(503).json({ error: error.message || 'Back-ups laden mislukt.' }); }
+});
+
+app.get('/api/admin/backups/:id/download', requireAdmin, async (req, res) => {
+  try {
+    const data = await readBackupById(req.params.id);
+    res.setHeader('Content-Type','application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="67school-backup-${Date.now()}.json"`);
+    res.send(JSON.stringify(data, null, 2));
+  } catch (error) { res.status(404).json({ error: error.message || 'Back-up niet gevonden.' }); }
+});
+
+app.get('/api/admin/backups-download-all', requireAdmin, async (_req, res) => {
+  try {
+    const backups = await listBackups();
+    const items = [];
+    for (const b of backups) {
+      try { items.push({ meta:b, data: await readBackupById(b.id) }); } catch (_) {}
+    }
+    res.setHeader('Content-Type','application/json; charset=utf-8');
+    res.setHeader('Content-Disposition','attachment; filename="67school-alle-backups.json"');
+    res.send(JSON.stringify({ exportedAt:new Date().toISOString(), count:items.length, backups:items }, null, 2));
+  } catch (error) { res.status(503).json({ error: error.message || 'Back-ups exporteren mislukt.' }); }
 });
 
 app.get('/api/admin/export.csv', requireAdmin, async (_req, res) => {

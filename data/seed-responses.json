@@ -1,0 +1,172 @@
+[
+  {
+    "id": "legacy-dcd61167e63b19db1e11f0ce",
+    "name": "Lizzy",
+    "className": "Wmh1b",
+    "activities": [
+      "Lasergamen",
+      "Filmavond",
+      "Silent disco",
+      "Karaoke"
+    ],
+    "foods": [
+      "Pizza",
+      "Friet & snacks",
+      "Broodjes",
+      "Fruit",
+      "Snoep & popcorn"
+    ],
+    "music": [
+      "Nederlandstalig",
+      "Van alles wat",
+      "Rap / hiphop",
+      "Pop",
+      "Dance / house",
+      "Throwbacks"
+    ],
+    "extras": [
+      "Fotobooth",
+      "DJ"
+    ],
+    "idea": "",
+    "dietary": "",
+    "device": {
+      "source": "Hersteld uit oude CSV-back-up"
+    },
+    "createdAt": "2026-09-07T12:45:27.730Z",
+    "restoredFrom": "67school-resultaten.csv"
+  },
+  {
+    "id": "legacy-3de03b00fb302cb46b0b65c5",
+    "name": "Meis Delsman",
+    "className": "Wm1b",
+    "activities": [
+      "Karaoke"
+    ],
+    "foods": [
+      "Friet & snacks",
+      "Snoep & popcorn"
+    ],
+    "music": [
+      "Pop",
+      "Nederlandstalig",
+      "Van alles wat"
+    ],
+    "extras": [
+      "Fotobooth",
+      "DJ",
+      "Dresscode / thema",
+      "Prijzen"
+    ],
+    "idea": "Photobooth en een karaoke en een dj dat is wel gezellig",
+    "dietary": "",
+    "device": {
+      "source": "Hersteld uit oude CSV-back-up"
+    },
+    "createdAt": "2026-09-07T12:47:34.658Z",
+    "restoredFrom": "67school-resultaten.csv"
+  },
+  {
+    "id": "legacy-c4d243706beeb72945319ef7",
+    "name": "Ruben",
+    "className": "wm-2c",
+    "activities": [
+      "Stormbaan / springkussens",
+      "Voetbaltoernooi"
+    ],
+    "foods": [
+      "Pizza",
+      "Snoep & popcorn"
+    ],
+    "music": [
+      "Van alles wat"
+    ],
+    "extras": [
+      "Prijzen",
+      "Wedstrijdjes"
+    ],
+    "idea": "",
+    "dietary": "",
+    "device": {
+      "source": "Hersteld uit oude CSV-back-up"
+    },
+    "createdAt": "2026-09-07T12:51:07.892Z",
+    "restoredFrom": "67school-resultaten.csv"
+  },
+  {
+    "id": "legacy-cecb227c094c36cf1f2abe07",
+    "name": "Kyra",
+    "className": "WMH1b",
+    "activities": [
+      "Lasergamen",
+      "Silent disco",
+      "Stormbaan / springkussens"
+    ],
+    "foods": [
+      "Pizza",
+      "Friet & snacks",
+      "Wraps",
+      "Pannenkoeken",
+      "Fruit",
+      "Snoep & popcorn"
+    ],
+    "music": [
+      "Pop",
+      "Dance / house",
+      "Van alles wat"
+    ],
+    "extras": [
+      "Fotobooth",
+      "DJ",
+      "Dresscode / thema"
+    ],
+    "idea": "Een school feest met heel veel eten en vooral gewoon dansen",
+    "dietary": "",
+    "device": {
+      "source": "Hersteld uit oude CSV-back-up"
+    },
+    "createdAt": "2026-09-07T12:54:01.192Z",
+    "restoredFrom": "67school-resultaten.csv"
+  },
+  {
+    "id": "legacy-10ae35edff9ff82df5e3094e",
+    "name": "Rasmia Dowiko",
+    "className": "Wm1b",
+    "activities": [
+      "Chillruimte",
+      "Game lounge",
+      "Filmavond",
+      "Voetbaltoernooi",
+      "Lasergamen"
+    ],
+    "foods": [
+      "Vegetarische opties",
+      "Halal opties",
+      "Snoep & popcorn",
+      "Fruit",
+      "Pannenkoeken",
+      "Broodjes",
+      "Wraps",
+      "Friet & snacks",
+      "Pizza"
+    ],
+    "music": [
+      "Van alles wat",
+      "Pop"
+    ],
+    "extras": [
+      "Fotobooth",
+      "DJ",
+      "Wedstrijdjes",
+      "Prijzen",
+      "Dresscode / thema"
+    ],
+    "idea": "",
+    "dietary": "Halal opties",
+    "device": {
+      "source": "Hersteld uit oude CSV-back-up"
+    },
+    "createdAt": "2026-09-07T12:57:45.489Z",
+    "restoredFrom": "67school-resultaten.csv"
+  }
+]

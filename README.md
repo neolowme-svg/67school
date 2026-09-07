@@ -1,23 +1,25 @@
-# 67school — Walewyc Mavo schoolfeest
+# 67school – Walewyc Mavo schoolfeest
 
-Versie 2 gebruikt op Vercel **Private Blob** als permanente opslag. Elke inzending wordt als een eigen JSON-object opgeslagen, zodat gelijktijdige inzendingen elkaar niet kunnen overschrijven en een refresh geen antwoorden kan wissen.
+Deze versie gebruikt Vercel Private Blob voor permanente inzendingen en back-ups.
 
-Daarnaast maakt de app **na iedere inzending** een volledige JSON-snapshot in `backups/`. Dat is voor een schoolvragenlijst veiliger dan alleen wachten op een timer: zodra een antwoord succesvol is opgeslagen, bestaat het zowel als individueel record als in een snapshot.
+Belangrijkste wijzigingen:
+- Admin pollt elke 1 seconde zonder de pagina volledig opnieuw te renderen.
+- Opengeklapte apparaatdetails blijven open tijdens live updates.
+- Reacties kunnen veilig worden verwijderd; vooraf wordt automatisch een back-up gemaakt.
+- Back-upcentrum: handmatige back-up, lijst van back-ups, individuele download en alle back-ups als één JSON-bundel.
+- De meegeleverde `data/seed-responses.json` bevat de 5 oude inzendingen uit `67school-resultaten.csv` en wordt bij de eerste Vercel-run automatisch aan Blob toegevoegd als die IDs nog niet bestaan.
+- Een verwijderde oude seed-reactie blijft verwijderd via een tombstone-record.
+- Browser/apparaatinfo blijft zichtbaar in admin voor zover browsers die informatie beschikbaar stellen.
 
-## Waarom geen `*/15` Vercel Cron in vercel.json?
+## Deploy
 
-Vercel Hobby staat momenteel alleen dagelijkse native Cron-runs toe. Een 15-minutencron kan een Hobby deployment blokkeren. Daarom bevat deze versie bewust geen verplichte 15-minutencron. Op Pro kan `/api/cron/backup` desgewenst met `*/15 * * * *` worden gepland. Zonder extra dienst blijft de gratis/Hobby-versie toch duurzaam doordat elk antwoord direct permanent wordt opgeslagen en direct een snapshot triggert.
+1. Zorg dat het Vercel-project aan een Private Blob store gekoppeld is.
+2. Zorg dat `ADMIN_PASSWORD` als Production environment variable bestaat.
+3. Push naar GitHub; Vercel deployt automatisch.
 
-## Admin
+## Lokale start
 
-`/admin` bevat live resultaten, zoeken/filteren, technische browser-/apparaatinfo, opslagstatus, back-upstatus, CSV/JSON export en CSV/JSON import.
-
-De browser kan geen echte Windows/telefoon-apparaatnaam uitlezen. Er wordt alleen browser-beschikbare technische info verzameld; dit wordt zichtbaar vermeld op het formulier.
-
-## Vercel
-
-1. Koppel een **Private Blob store** aan hetzelfde Vercel-project.
-2. Zet `ADMIN_PASSWORD` voor Production.
-3. Deploy opnieuw.
-
-Lokaal gebruikt `npm start` nog `data/responses.json`.
+```powershell
+npm.cmd install
+npm.cmd start
+```
