@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#ffffff" />
+  <title>67school Admin</title>
+  <link rel="icon" type="image/png" href="/favicon.png" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="admin-page">
+  <div class="bg-orb orb-a"></div><div class="bg-orb orb-b"></div><div class="noise"></div>
+
+  <main class="admin-shell">
+    <section id="loginView" class="login-card glass">
+      <img src="/assets/logo.png" class="admin-logo" alt="67school" />
+      <p class="eyebrow">Beheer</p>
+      <h1>Adminpaneel</h1>
+      <p>Bekijk live alle inzendingen en stemmen.</p>
+      <form id="loginForm">
+        <input id="adminPassword" class="big-input" type="password" autocomplete="current-password" placeholder="Admin wachtwoord" required />
+        <button class="primary full" type="submit">Inloggen →</button>
+      </form>
+      <p id="loginError" class="error-text"></p>
+    </section>
+
+    <section id="dashboard" class="dashboard hidden">
+      <header class="admin-header glass">
+        <div class="admin-brand"><img src="/assets/logo.png" alt="67school" /><div><b>67school</b><span>Live resultaten</span></div></div>
+        <div class="live-pill"><i></i> LIVE</div>
+        <div class="header-actions"><a class="ghost small-btn" href="/api/admin/export.csv">CSV export</a><button id="logout" class="ghost small-btn">Uitloggen</button></div>
+      </header>
+
+      <div id="passwordWarning" class="warning hidden">⚠️ Je gebruikt nog het standaard adminwachtwoord. Pas <code>ADMIN_PASSWORD</code> in <code>.env</code> aan voordat de website publiek staat.</div>
+
+      <section class="stats-grid">
+        <article class="stat-card glass"><span>Totaal reacties</span><strong id="totalCount">0</strong><small id="filteredCount">0 zichtbaar</small></article>
+        <article class="stat-card glass"><span>Vandaag</span><strong id="todayCount">0</strong><small>nieuwe reacties</small></article>
+        <article class="stat-card glass"><span>Populairste activiteit</span><strong id="topActivity">–</strong><small id="topActivityCount">nog geen stemmen</small></article>
+        <article class="stat-card glass"><span>Populairste eten</span><strong id="topFood">–</strong><small id="topFoodCount">nog geen stemmen</small></article>
+      </section>
+
+      <section class="charts-grid">
+        <article class="panel glass"><div class="panel-title"><div><p class="eyebrow">Activiteiten</p><h2>Wat wordt het vaakst gekozen?</h2></div></div><div id="activityChart" class="bar-chart"></div></article>
+        <article class="panel glass"><div class="panel-title"><div><p class="eyebrow">Eten</p><h2>Favorieten</h2></div></div><div id="foodChart" class="bar-chart"></div></article>
+        <article class="panel glass"><div class="panel-title"><div><p class="eyebrow">Muziek</p><h2>Muzieksmaak</h2></div></div><div id="musicChart" class="bar-chart"></div></article>
+        <article class="panel glass"><div class="panel-title"><div><p class="eyebrow">Klassen</p><h2>Reacties per klas</h2></div></div><div id="classChart" class="bar-chart"></div></article>
+      </section>
+
+      <section class="panel glass responses-panel">
+        <div class="panel-title responsive"><div><p class="eyebrow">Inzendingen</p><h2>Alle reacties</h2></div><div class="filters"><input id="search" placeholder="Zoek op naam, klas of idee…" /><select id="classFilter"><option value="">Alle klassen</option></select></div></div>
+        <div class="table-wrap"><table><thead><tr><th>Naam</th><th>Klas</th><th>Activiteiten</th><th>Eten</th><th>Idee</th><th>Datum</th><th></th></tr></thead><tbody id="resultRows"></tbody></table></div>
+        <div id="emptyState" class="empty hidden">Nog geen resultaten gevonden.</div>
+      </section>
+    </section>
+  </main>
+  <div id="toast" class="toast" role="status"></div>
+  <script src="/admin.js" defer></script>
+</body>
+</html>

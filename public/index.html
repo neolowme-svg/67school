@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#ffffff" />
+  <meta name="description" content="Denk mee over het Walewyc Mavo schoolfeest van 67school." />
+  <title>67school · Walewyc Mavo Schoolfeest</title>
+  <link rel="icon" type="image/png" href="/favicon.png" />
+  <link rel="apple-touch-icon" href="/favicon.png" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="survey-page">
+  <div class="bg-orb orb-a"></div><div class="bg-orb orb-b"></div><div class="noise"></div>
+  <canvas id="confetti" aria-hidden="true"></canvas>
+  <header class="topbar">
+    <img src="/assets/logo.png" class="brand-logo" alt="67school Walewyc Mavo Schoolfeest" />
+    <div class="progress-wrap" aria-label="Voortgang"><div id="progress" class="progress"></div></div>
+    <span id="stepCount" class="step-count">Welkom</span>
+  </header>
+
+  <main id="app" class="app-shell">
+    <section class="screen active" data-step="intro">
+      <div class="hero-card glass">
+        <div class="sparkle">✦</div>
+        <p class="eyebrow">WaleWyc Mavo · Schoolfeest</p>
+        <h1>Hoi! Leuk dat je wilt <span>meedenken.</span></h1>
+        <p class="lead">Jouw antwoorden helpen ons om een schoolfeest te maken waar zoveel mogelijk leerlingen echt zin in hebben.</p>
+        <button class="primary big" data-next>Ik doe mee <span>→</span></button>
+        <p class="tiny">Duurt ongeveer 2 minuten.</p>
+      </div>
+    </section>
+
+    <section class="screen" data-step="name">
+      <div class="question-card glass">
+        <span class="question-number">01</span>
+        <p class="eyebrow">Eerst even voorstellen</p>
+        <h2>Wat is je naam?</h2>
+        <p>Dan weten we van wie de ideeën komen.</p>
+        <input id="name" class="big-input shake-on-type" type="text" maxlength="80" autocomplete="name" placeholder="Typ je naam…" />
+        <div class="actions"><button class="ghost" data-back>← Terug</button><button class="primary" data-next>Volgende →</button></div>
+      </div>
+    </section>
+
+    <section class="screen" data-step="class">
+      <div class="question-card glass">
+        <span class="question-number">02</span>
+        <p class="eyebrow">Je klas</p>
+        <h2>In welke klas zit je?</h2>
+        <input id="className" class="big-input shake-on-type" type="text" maxlength="40" placeholder="Bijv. 2B, 3A, 4C…" />
+        <div class="actions"><button class="ghost" data-back>← Terug</button><button class="primary" data-next>Volgende →</button></div>
+      </div>
+    </section>
+
+    <section class="screen" data-step="activities">
+      <div class="question-card glass wide">
+        <span class="question-number">03</span>
+        <p class="eyebrow">Activiteiten</p>
+        <h2>Wat zou jij het liefst willen doen?</h2>
+        <p>Kies gerust meerdere dingen.</p>
+        <div class="choice-grid" data-group="activities">
+          <button class="choice" data-value="Lasergamen">🔫 <b>Lasergamen</b></button>
+          <button class="choice" data-value="Voetbaltoernooi">⚽ <b>Voetbaltoernooi</b></button>
+          <button class="choice" data-value="Arena / obstacle games">🏟️ <b>Arena / obstacle games</b></button>
+          <button class="choice" data-value="Filmavond">🎬 <b>Filmavond</b></button>
+          <button class="choice" data-value="Game lounge">🎮 <b>Game lounge</b></button>
+          <button class="choice" data-value="Silent disco">🎧 <b>Silent disco</b></button>
+          <button class="choice" data-value="Karaoke">🎤 <b>Karaoke</b></button>
+          <button class="choice" data-value="Stormbaan / springkussens">🏃 <b>Stormbaan</b></button>
+          <button class="choice" data-value="Chillruimte">🛋️ <b>Chillruimte</b></button>
+          <button class="choice other-toggle" data-target="activityOther">✨ <b>Iets anders</b></button>
+        </div>
+        <input id="activityOther" class="inline-other hidden" maxlength="100" placeholder="Wat zou jij zelf willen doen?" />
+        <div class="actions"><button class="ghost" data-back>← Terug</button><button class="primary" data-next>Volgende →</button></div>
+      </div>
+    </section>
+
+    <section class="screen" data-step="food">
+      <div class="question-card glass wide">
+        <span class="question-number">04</span>
+        <p class="eyebrow">Eten</p>
+        <h2>Wat moet er volgens jou te eten zijn?</h2>
+        <p>Kies alles waar jij blij van wordt.</p>
+        <div class="choice-grid" data-group="foods">
+          <button class="choice" data-value="Pizza">🍕 <b>Pizza</b></button>
+          <button class="choice" data-value="Friet & snacks">🍟 <b>Friet & snacks</b></button>
+          <button class="choice" data-value="Wraps">🌯 <b>Wraps</b></button>
+          <button class="choice" data-value="Broodjes">🥪 <b>Broodjes</b></button>
+          <button class="choice" data-value="Pannenkoeken">🥞 <b>Pannenkoeken</b></button>
+          <button class="choice" data-value="Fruit">🍓 <b>Fruit</b></button>
+          <button class="choice" data-value="Snoep & popcorn">🍿 <b>Snoep & popcorn</b></button>
+          <button class="choice" data-value="Halal opties">✅ <b>Halal opties</b></button>
+          <button class="choice" data-value="Vegetarische opties">🌱 <b>Vegetarische opties</b></button>
+          <button class="choice other-toggle" data-target="foodOther">✨ <b>Iets anders</b></button>
+        </div>
+        <input id="foodOther" class="inline-other hidden" maxlength="100" placeholder="Wat mis je nog?" />
+        <div class="actions"><button class="ghost" data-back>← Terug</button><button class="primary" data-next>Volgende →</button></div>
+      </div>
+    </section>
+
+    <section class="screen" data-step="music">
+      <div class="question-card glass wide">
+        <span class="question-number">05</span>
+        <p class="eyebrow">Muziek</p>
+        <h2>Welke muziek wil je horen?</h2>
+        <div class="choice-grid" data-group="music">
+          <button class="choice" data-value="Pop">🎶 <b>Pop</b></button>
+          <button class="choice" data-value="Rap / hiphop">🎙️ <b>Rap / hiphop</b></button>
+          <button class="choice" data-value="Dance / house">💿 <b>Dance / house</b></button>
+          <button class="choice" data-value="Nederlandstalig">🇳🇱 <b>Nederlandstalig</b></button>
+          <button class="choice" data-value="Throwbacks">⏪ <b>Throwbacks</b></button>
+          <button class="choice" data-value="Van alles wat">🔀 <b>Van alles wat</b></button>
+          <button class="choice other-toggle" data-target="musicOther">✨ <b>Iets anders</b></button>
+        </div>
+        <input id="musicOther" class="inline-other hidden" maxlength="100" placeholder="Welke muziek dan?" />
+        <div class="actions"><button class="ghost" data-back>← Terug</button><button class="primary" data-next>Volgende →</button></div>
+      </div>
+    </section>
+
+    <section class="screen" data-step="extras">
+      <div class="question-card glass wide">
+        <span class="question-number">06</span>
+        <p class="eyebrow">Extra's</p>
+        <h2>Wat zou het feest nóg leuker maken?</h2>
+        <div class="choice-grid" data-group="extras">
+          <button class="choice" data-value="Fotobooth">📸 <b>Fotobooth</b></button>
+          <button class="choice" data-value="DJ">🎛️ <b>DJ</b></button>
+          <button class="choice" data-value="Wedstrijdjes">🏆 <b>Wedstrijdjes</b></button>
+          <button class="choice" data-value="Prijzen">🎁 <b>Prijzen</b></button>
+          <button class="choice" data-value="Dresscode / thema">🪩 <b>Dresscode / thema</b></button>
+          <button class="choice" data-value="Geen extra's nodig">👌 <b>Geen extra's nodig</b></button>
+          <button class="choice other-toggle" data-target="extrasOther">✨ <b>Eigen idee</b></button>
+        </div>
+        <input id="extrasOther" class="inline-other hidden" maxlength="100" placeholder="Vertel je extra idee…" />
+        <div class="actions"><button class="ghost" data-back>← Terug</button><button class="primary" data-next>Volgende →</button></div>
+      </div>
+    </section>
+
+    <section class="screen" data-step="idea">
+      <div class="question-card glass">
+        <span class="question-number">07</span>
+        <p class="eyebrow">Jouw idee</p>
+        <h2>Als jij het schoolfeest mocht bedenken…</h2>
+        <p>Wat móét er dan echt bij zijn? Deze vraag mag je overslaan.</p>
+        <textarea id="idea" class="big-input textarea shake-on-type" maxlength="500" placeholder="Schrijf hier je beste idee…"></textarea>
+        <label class="small-label" for="dietary">Allergie / dieetwens? (optioneel)</label>
+        <input id="dietary" class="big-input small shake-on-type" maxlength="300" placeholder="Bijv. lactosevrij, notenallergie…" />
+        <div class="actions"><button class="ghost" data-back>← Terug</button><button id="submitBtn" class="primary">Versturen ✨</button></div>
+      </div>
+    </section>
+
+    <section class="screen" data-step="done">
+      <div class="hero-card glass done-card">
+        <div class="done-icon">✓</div>
+        <p class="eyebrow">Gelukt!</p>
+        <h1>Bedankt, <span id="doneName">jij</span>!</h1>
+        <p class="lead">Je antwoorden zijn opgeslagen. Hiermee help je ons om van het schoolfeest iets te maken waar iedereen naar uitkijkt.</p>
+        <button id="restart" class="ghost">Nog een reactie invullen</button>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status"></div>
+  <script src="/app.js" defer></script>
+</body>
+</html>
