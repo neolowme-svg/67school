@@ -10,14 +10,15 @@ loadEnv(path.join(__dirname, '.env'));
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'verander-dit-wachtwoord';
 const IS_VERCEL = Boolean(process.env.VERCEL);
-const DATA_DIR = process.env.DATA_DIR || (IS_VERCEL ? path.join('/tmp', '67school-data') : path.join(__dirname, 'data'));
-const DATA_FILE = path.join(DATA_DIR, 'responses.json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
-
-const sseClients = new Set();
-let writeChain = Promise.resolve();
+const LOCAL_DATA_DIR = path.join(__dirname, 'data');
+const LOCAL_DATA_FILE = path.join(LOCAL_DATA_DIR, 'responses.json');
+const LOCAL_BACKUP_DIR = path.join(LOCAL_DATA_DIR, 'backups');
+const RESPONSE_PREFIX = 'responses/';
+const BACKUP_PREFIX = 'backups/';
+let localWriteChain = Promise.resolve();
+let blobSdkPromise = null;
 
 function loadEnv(file) {
   try {
@@ -34,35 +35,17 @@ function loadEnv(file) {
   } catch (_) {}
 }
 
-async function ensureDataFile() {
-  await fsp.mkdir(DATA_DIR, { recursive: true });
-  try {
-    await fsp.access(DATA_FILE);
-  } catch {
-    await fsp.writeFile(DATA_FILE, '[]\n', 'utf8');
-  }
+function getAdminPassword() {
+  return String(process.env.ADMIN_PASSWORD || '').trim();
 }
 
-async function readResponses() {
-  await ensureDataFile();
-  try {
-    const raw = await fsp.readFile(DATA_FILE, 'utf8');
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    console.error('Kon responses.json niet lezen:', error);
-    return [];
-  }
+function getCronSecret() {
+  return String(process.env.CRON_SECRET || '').trim();
 }
 
-function writeResponses(rows) {
-  writeChain = writeChain.then(async () => {
-    await ensureDataFile();
-    const temp = DATA_FILE + '.tmp';
-    await fsp.writeFile(temp, JSON.stringify(rows, null, 2) + '\n', 'utf8');
-    await fsp.rename(temp, DATA_FILE);
-  });
-  return writeChain;
+async function getBlobSdk() {
+  if (!blobSdkPromise) blobSdkPromise = import('@vercel/blob');
+  return blobSdkPromise;
 }
 
 function sanitizeText(value, max = 120) {
@@ -85,21 +68,28 @@ function parseCookies(req) {
   return result;
 }
 
+function safeEqual(aValue, bValue) {
+  const a = Buffer.from(String(aValue ?? ''));
+  const b = Buffer.from(String(bValue ?? ''));
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
 function makeAdminToken(expiresAt) {
+  const password = getAdminPassword();
   const payload = String(expiresAt);
-  const sig = crypto.createHmac('sha256', ADMIN_PASSWORD).update(payload).digest('hex');
+  const sig = crypto.createHmac('sha256', password).update(payload).digest('hex');
   return `${payload}.${sig}`;
 }
 
 function isAdmin(req) {
+  const password = getAdminPassword();
+  if (!password) return false;
   const token = parseCookies(req).admin_session || '';
   const [expiresRaw, sig] = token.split('.');
   const expiresAt = Number(expiresRaw);
   if (!expiresAt || !sig || Date.now() > expiresAt) return false;
-  const expected = crypto.createHmac('sha256', ADMIN_PASSWORD).update(expiresRaw).digest('hex');
-  const a = Buffer.from(sig);
-  const b = Buffer.from(expected);
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
+  const expected = crypto.createHmac('sha256', password).update(expiresRaw).digest('hex');
+  return safeEqual(sig, expected);
 }
 
 function requireAdmin(req, res, next) {
@@ -107,10 +97,125 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-function notifyAdmins() {
-  for (const res of sseClients) {
-    res.write(`event: update\ndata: ${JSON.stringify({ at: Date.now() })}\n\n`);
+async function ensureLocalDataFile() {
+  await fsp.mkdir(LOCAL_DATA_DIR, { recursive: true });
+  try { await fsp.access(LOCAL_DATA_FILE); }
+  catch { await fsp.writeFile(LOCAL_DATA_FILE, '[]\n', 'utf8'); }
+}
+
+async function readLocalResponses() {
+  await ensureLocalDataFile();
+  try {
+    const parsed = JSON.parse(await fsp.readFile(LOCAL_DATA_FILE, 'utf8'));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error('Kon lokale responses.json niet lezen:', error);
+    return [];
   }
+}
+
+async function writeLocalResponses(rows) {
+  localWriteChain = localWriteChain.then(async () => {
+    await ensureLocalDataFile();
+    const temp = LOCAL_DATA_FILE + '.tmp';
+    await fsp.writeFile(temp, JSON.stringify(rows, null, 2) + '\n', 'utf8');
+    await fsp.rename(temp, LOCAL_DATA_FILE);
+  });
+  return localWriteChain;
+}
+
+async function readBlobJson(pathname) {
+  const { get } = await getBlobSdk();
+  const result = await get(pathname, { access: 'private', useCache: false });
+  if (!result) return null;
+  const text = await new Response(result.stream).text();
+  return JSON.parse(text);
+}
+
+async function listBlobObjects(prefix) {
+  const { list } = await getBlobSdk();
+  const blobs = [];
+  let cursor;
+  do {
+    const page = await list({ prefix, limit: 1000, cursor });
+    blobs.push(...page.blobs);
+    cursor = page.hasMore ? page.cursor : undefined;
+  } while (cursor);
+  return blobs;
+}
+
+async function readBlobResponses() {
+  const blobs = await listBlobObjects(RESPONSE_PREFIX);
+  const rows = [];
+  const batchSize = 25;
+  for (let i = 0; i < blobs.length; i += batchSize) {
+    const batch = blobs.slice(i, i + batchSize);
+    const values = await Promise.all(batch.map(async blob => {
+      try { return await readBlobJson(blob.pathname); }
+      catch (error) { console.error('Blob lezen mislukt:', blob.pathname, error); return null; }
+    }));
+    rows.push(...values.filter(Boolean));
+  }
+  return rows;
+}
+
+async function readResponses() {
+  if (!IS_VERCEL) return readLocalResponses();
+  try {
+    return await readBlobResponses();
+  } catch (error) {
+    console.error('Vercel Blob lezen mislukt:', error);
+    throw new Error('Permanente opslag is niet beschikbaar. Controleer Vercel Blob.');
+  }
+}
+
+async function saveResponse(record) {
+  if (!IS_VERCEL) {
+    const rows = await readLocalResponses();
+    rows.push(record);
+    await writeLocalResponses(rows);
+    return;
+  }
+  try {
+    const { put } = await getBlobSdk();
+    const safeTime = record.createdAt.replace(/[:.]/g, '-');
+    const pathname = `${RESPONSE_PREFIX}${safeTime}_${record.id}.json`;
+    await put(pathname, JSON.stringify(record, null, 2), {
+      access: 'private',
+      contentType: 'application/json',
+      addRandomSuffix: false
+    });
+  } catch (error) {
+    console.error('Vercel Blob opslaan mislukt:', error);
+    throw new Error('Opslaan is mislukt. Je antwoord is NIET bewaard; probeer opnieuw of meld dit bij de organisatie.');
+  }
+}
+
+async function responseIdExists(id) {
+  const rows = await readResponses();
+  return rows.some(row => row.id === id);
+}
+
+async function createBackup(reason = 'manual') {
+  const rows = await readResponses();
+  const createdAt = new Date().toISOString();
+  const snapshot = { version: 1, createdAt, reason, count: rows.length, responses: rows };
+
+  if (!IS_VERCEL) {
+    await fsp.mkdir(LOCAL_BACKUP_DIR, { recursive: true });
+    const filename = `${createdAt.replace(/[:.]/g, '-')}.json`;
+    await fsp.writeFile(path.join(LOCAL_BACKUP_DIR, filename), JSON.stringify(snapshot, null, 2) + '\n', 'utf8');
+    await fsp.writeFile(path.join(LOCAL_BACKUP_DIR, 'latest.json'), JSON.stringify(snapshot, null, 2) + '\n', 'utf8');
+    return { createdAt, count: rows.length, pathname: path.join('data', 'backups', filename) };
+  }
+
+  const { put } = await getBlobSdk();
+  const stamp = createdAt.replace(/[:.]/g, '-');
+  const pathname = `${BACKUP_PREFIX}${stamp}.json`;
+  const body = JSON.stringify(snapshot, null, 2);
+  await put(pathname, body, { access: 'private', contentType: 'application/json', addRandomSuffix: false });
+  await put(`${BACKUP_PREFIX}latest.json`, body, { access: 'private', contentType: 'application/json', addRandomSuffix: false, allowOverwrite: true });
+  return { createdAt, count: rows.length, pathname };
 }
 
 function countValues(rows, key) {
@@ -129,6 +234,7 @@ function countValues(rows, key) {
 }
 
 function buildStats(rows) {
+  const today = new Date().toDateString();
   return {
     total: rows.length,
     classes: countValues(rows, 'className'),
@@ -136,61 +242,112 @@ function buildStats(rows) {
     foods: countValues(rows, 'foods'),
     music: countValues(rows, 'music'),
     extras: countValues(rows, 'extras'),
-    submittedToday: rows.filter(r => {
-      const d = new Date(r.createdAt);
-      const now = new Date();
-      return d.toDateString() === now.toDateString();
-    }).length
+    submittedToday: rows.filter(r => new Date(r.createdAt).toDateString() === today).length
+  };
+}
+
+function maskedIp(req) {
+  const raw = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  if (!raw) return '';
+  if (raw.includes(':')) {
+    const parts = raw.split(':').filter(Boolean);
+    return parts.slice(0, 4).join(':') + ':…';
+  }
+  const parts = raw.split('.');
+  return parts.length === 4 ? `${parts[0]}.${parts[1]}.${parts[2]}.x` : '';
+}
+
+function collectServerDeviceInfo(req) {
+  return {
+    requestUserAgent: sanitizeText(req.headers['user-agent'], 500),
+    acceptLanguage: sanitizeText(req.headers['accept-language'], 200),
+    secChUa: sanitizeText(req.headers['sec-ch-ua'], 300),
+    secChUaMobile: sanitizeText(req.headers['sec-ch-ua-mobile'], 50),
+    secChUaPlatform: sanitizeText(req.headers['sec-ch-ua-platform'], 100),
+    maskedIp: maskedIp(req)
+  };
+}
+
+function sanitizeDevice(value, req) {
+  const d = value && typeof value === 'object' ? value : {};
+  return {
+    clientId: sanitizeText(d.clientId, 100),
+    deviceType: sanitizeText(d.deviceType, 60),
+    os: sanitizeText(d.os, 100),
+    browser: sanitizeText(d.browser, 120),
+    browserBrands: sanitizeText(d.browserBrands, 300),
+    platform: sanitizeText(d.platform, 100),
+    screen: sanitizeText(d.screen, 60),
+    viewport: sanitizeText(d.viewport, 60),
+    pixelRatio: sanitizeText(d.pixelRatio, 30),
+    colorDepth: sanitizeText(d.colorDepth, 30),
+    language: sanitizeText(d.language, 60),
+    languages: sanitizeText(d.languages, 200),
+    timezone: sanitizeText(d.timezone, 100),
+    hardwareConcurrency: sanitizeText(d.hardwareConcurrency, 30),
+    deviceMemory: sanitizeText(d.deviceMemory, 30),
+    maxTouchPoints: sanitizeText(d.maxTouchPoints, 30),
+    cookieEnabled: sanitizeText(d.cookieEnabled, 20),
+    doNotTrack: sanitizeText(d.doNotTrack, 30),
+    connection: sanitizeText(d.connection, 200),
+    userAgent: sanitizeText(d.userAgent, 500),
+    ...collectServerDeviceInfo(req)
   };
 }
 
 app.disable('x-powered-by');
-app.use(express.json({ limit: '100kb' }));
+app.use(express.json({ limit: '200kb' }));
 app.use(express.urlencoded({ extended: false }));
 app.use(express.static(PUBLIC_DIR, { extensions: ['html'] }));
 
 app.post('/api/submit', async (req, res) => {
-  const body = req.body || {};
-  const name = sanitizeText(body.name, 80);
-  const className = sanitizeText(body.className, 40);
-  const activities = sanitizeArray(body.activities);
-  const foods = sanitizeArray(body.foods);
-  const music = sanitizeArray(body.music);
-  const extras = sanitizeArray(body.extras);
-  const idea = sanitizeText(body.idea, 500);
-  const dietary = sanitizeText(body.dietary, 300);
+  try {
+    const body = req.body || {};
+    const name = sanitizeText(body.name, 80);
+    const className = sanitizeText(body.className, 40);
+    const activities = sanitizeArray(body.activities);
+    const foods = sanitizeArray(body.foods);
+    const music = sanitizeArray(body.music);
+    const extras = sanitizeArray(body.extras);
+    const idea = sanitizeText(body.idea, 500);
+    const dietary = sanitizeText(body.dietary, 300);
 
-  if (name.length < 2) return res.status(400).json({ error: 'Vul je naam in.' });
-  if (!className) return res.status(400).json({ error: 'Vul je klas in.' });
-  if (!activities.length) return res.status(400).json({ error: 'Kies minimaal één activiteit.' });
-  if (!foods.length) return res.status(400).json({ error: 'Kies minimaal één soort eten.' });
+    if (name.length < 2) return res.status(400).json({ error: 'Vul je naam in.' });
+    if (!className) return res.status(400).json({ error: 'Vul je klas in.' });
+    if (!activities.length) return res.status(400).json({ error: 'Kies minimaal één activiteit.' });
+    if (!foods.length) return res.status(400).json({ error: 'Kies minimaal één soort eten.' });
 
-  const rows = await readResponses();
-  const record = {
-    id: crypto.randomUUID(),
-    name,
-    className,
-    activities,
-    foods,
-    music,
-    extras,
-    idea,
-    dietary,
-    createdAt: new Date().toISOString()
-  };
-  rows.push(record);
-  await writeResponses(rows);
-  notifyAdmins();
-  res.status(201).json({ ok: true, id: record.id });
+    const record = {
+      id: crypto.randomUUID(),
+      name,
+      className,
+      activities,
+      foods,
+      music,
+      extras,
+      idea,
+      dietary,
+      device: sanitizeDevice(body.device, req),
+      createdAt: new Date().toISOString()
+    };
+
+    await saveResponse(record);
+    // De inzending zelf is al permanent opgeslagen als los, immutable Blob-object.
+    // Daarnaast maken we direct een volledige JSON-snapshot. Een mislukte snapshot
+    // maakt de reeds opgeslagen inzending niet ongedaan.
+    try { await createBackup('after-submit'); } catch (backupError) { console.error('Snapshot na inzending mislukt:', backupError); }
+    res.status(201).json({ ok: true, id: record.id, storage: IS_VERCEL ? 'vercel-blob-private' : 'local-json' });
+  } catch (error) {
+    console.error(error);
+    res.status(503).json({ error: error.message || 'Opslaan mislukt.' });
+  }
 });
 
 app.post('/api/admin/login', (req, res) => {
+  const password = getAdminPassword();
+  if (!password) return res.status(503).json({ error: 'ADMIN_PASSWORD is niet ingesteld in Vercel.' });
   const candidate = String(req.body?.password || '');
-  const a = Buffer.from(candidate);
-  const b = Buffer.from(ADMIN_PASSWORD);
-  const ok = a.length === b.length && crypto.timingSafeEqual(a, b);
-  if (!ok) return res.status(401).json({ error: 'Onjuist wachtwoord.' });
-
+  if (!safeEqual(candidate, password)) return res.status(401).json({ error: 'Onjuist wachtwoord.' });
   const expiresAt = Date.now() + 12 * 60 * 60 * 1000;
   const token = makeAdminToken(expiresAt);
   const secure = process.env.NODE_ENV === 'production' || IS_VERCEL ? '; Secure' : '';
@@ -205,39 +362,72 @@ app.post('/api/admin/logout', (_req, res) => {
 });
 
 app.get('/api/admin/me', (req, res) => {
-  res.json({ authenticated: isAdmin(req), defaultPasswordWarning: ADMIN_PASSWORD === 'verander-dit-wachtwoord' });
+  res.json({
+    authenticated: isAdmin(req),
+    adminPasswordConfigured: Boolean(getAdminPassword()),
+    storageMode: IS_VERCEL ? 'Vercel Private Blob' : 'Lokale JSON'
+  });
 });
 
 app.get('/api/admin/results', requireAdmin, async (req, res) => {
-  const rows = await readResponses();
-  const q = sanitizeText(req.query.q, 100).toLowerCase();
-  const classFilter = sanitizeText(req.query.className, 40).toLowerCase();
-  const filtered = rows.filter(row => {
-    const matchQ = !q || row.name.toLowerCase().includes(q) || row.className.toLowerCase().includes(q) || row.idea.toLowerCase().includes(q);
-    const matchClass = !classFilter || row.className.toLowerCase() === classFilter;
-    return matchQ && matchClass;
-  }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  res.json({ rows: filtered, stats: buildStats(rows), totalFiltered: filtered.length });
+  try {
+    const rows = await readResponses();
+    const q = sanitizeText(req.query.q, 100).toLowerCase();
+    const classFilter = sanitizeText(req.query.className, 40).toLowerCase();
+    const filtered = rows.filter(row => {
+      const deviceSearch = Object.values(row.device || {}).join(' ').toLowerCase();
+      const searchable = [row.name, row.className, row.idea, row.dietary, ...(row.activities || []), ...(row.foods || []), ...(row.music || []), ...(row.extras || [])].join(' ').toLowerCase();
+      return (!q || searchable.includes(q) || deviceSearch.includes(q)) && (!classFilter || String(row.className).toLowerCase() === classFilter);
+    }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ rows: filtered, stats: buildStats(rows), totalFiltered: filtered.length, storageMode: IS_VERCEL ? 'Vercel Private Blob' : 'Lokale JSON' });
+  } catch (error) {
+    res.status(503).json({ error: error.message || 'Resultaten konden niet worden geladen.' });
+  }
 });
 
-app.get('/api/admin/events', requireAdmin, (req, res) => {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.flushHeaders?.();
-  res.write('event: ready\ndata: {}\n\n');
-  sseClients.add(res);
-  req.on('close', () => sseClients.delete(res));
+app.get('/api/admin/storage-status', requireAdmin, async (_req, res) => {
+  let responseCount = null;
+  let backupCount = null;
+  let ok = true;
+  let error = '';
+  try {
+    if (IS_VERCEL) {
+      responseCount = (await listBlobObjects(RESPONSE_PREFIX)).length;
+      backupCount = (await listBlobObjects(BACKUP_PREFIX)).filter(b => b.pathname !== `${BACKUP_PREFIX}latest.json`).length;
+    } else {
+      responseCount = (await readLocalResponses()).length;
+      try { backupCount = (await fsp.readdir(LOCAL_BACKUP_DIR)).filter(x => x.endsWith('.json') && x !== 'latest.json').length; }
+      catch { backupCount = 0; }
+    }
+  } catch (e) { ok = false; error = e.message; }
+  res.json({ ok, storageMode: IS_VERCEL ? 'Vercel Private Blob' : 'Lokale JSON', responseCount, backupCount, cronConfigured: Boolean(getCronSecret()), adminPasswordConfigured: Boolean(getAdminPassword()), error });
+});
+
+app.post('/api/admin/backup-now', requireAdmin, async (_req, res) => {
+  try { res.json({ ok: true, backup: await createBackup('manual-admin') }); }
+  catch (error) { res.status(503).json({ error: error.message || 'Backup mislukt.' }); }
+});
+
+app.get('/api/cron/backup', async (req, res) => {
+  const secret = getCronSecret();
+  if (!secret) return res.status(503).json({ error: 'CRON_SECRET ontbreekt.' });
+  const auth = String(req.headers.authorization || '');
+  if (!safeEqual(auth, `Bearer ${secret}`)) return res.status(401).json({ error: 'Niet toegestaan.' });
+  try { res.json({ ok: true, backup: await createBackup('vercel-cron-15m') }); }
+  catch (error) { res.status(503).json({ error: error.message || 'Backup mislukt.' }); }
 });
 
 app.get('/api/admin/export.csv', requireAdmin, async (_req, res) => {
   const rows = await readResponses();
-  const headers = ['naam','klas','activiteiten','eten','muziek','extras','eigen_idee','dieet_allergie','ingediend_op'];
+  const headers = ['id','naam','klas','activiteiten','eten','muziek','extras','eigen_idee','dieet_allergie','device_type','os','browser','browser_brands','platform','screen','viewport','pixel_ratio','color_depth','language','languages','timezone','cpu_threads','device_memory','touch_points','cookies','do_not_track','connection','client_id','user_agent','request_user_agent','accept_language','sec_ch_ua','sec_ch_ua_mobile','sec_ch_ua_platform','masked_ip','ingediend_op'];
   const escape = value => `"${String(value ?? '').replace(/"/g, '""')}"`;
   const lines = [headers.join(',')];
   for (const row of rows) {
+    const d = row.device || {};
     lines.push([
-      row.name, row.className, row.activities.join(' | '), row.foods.join(' | '), row.music.join(' | '), row.extras.join(' | '), row.idea, row.dietary, row.createdAt
+      row.id,row.name,row.className,(row.activities||[]).join(' | '),(row.foods||[]).join(' | '),(row.music||[]).join(' | '),(row.extras||[]).join(' | '),row.idea,row.dietary,
+      d.deviceType,d.os,d.browser,d.browserBrands,d.platform,d.screen,d.viewport,d.pixelRatio,d.colorDepth,d.language,d.languages,d.timezone,d.hardwareConcurrency,d.deviceMemory,d.maxTouchPoints,d.cookieEnabled,d.doNotTrack,d.connection,d.clientId,d.userAgent,d.requestUserAgent,d.acceptLanguage,d.secChUa,d.secChUaMobile,d.secChUaPlatform,d.maskedIp,row.createdAt
     ].map(escape).join(','));
   }
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -245,25 +435,99 @@ app.get('/api/admin/export.csv', requireAdmin, async (_req, res) => {
   res.send('\ufeff' + lines.join('\r\n'));
 });
 
-app.delete('/api/admin/results/:id', requireAdmin, async (req, res) => {
+app.get('/api/admin/export.json', requireAdmin, async (_req, res) => {
   const rows = await readResponses();
-  const next = rows.filter(r => r.id !== req.params.id);
-  if (next.length === rows.length) return res.status(404).json({ error: 'Resultaat niet gevonden.' });
-  await writeResponses(next);
-  notifyAdmins();
-  res.json({ ok: true });
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="67school-resultaten.json"');
+  res.send(JSON.stringify({ exportedAt: new Date().toISOString(), count: rows.length, responses: rows }, null, 2));
+});
+
+function parseCsv(text) {
+  const rows = []; let row = []; let cell = ''; let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quoted) {
+      if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+      else if (ch === '"') quoted = false;
+      else cell += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ',') { row.push(cell); cell = ''; }
+    else if (ch === '\n') { row.push(cell.replace(/\r$/, '')); rows.push(row); row = []; cell = ''; }
+    else cell += ch;
+  }
+  if (cell.length || row.length) { row.push(cell.replace(/\r$/, '')); rows.push(row); }
+  return rows.filter(r => r.some(c => String(c).trim() !== ''));
+}
+
+app.post('/api/admin/import.csv', requireAdmin, express.text({ type: ['text/csv','text/plain','application/csv','application/vnd.ms-excel'], limit: '5mb' }), async (req, res) => {
+  try {
+    const csv = String(req.body || '').replace(/^\ufeff/, '');
+    if (!csv.trim()) return res.status(400).json({ error: 'Leeg CSV-bestand.' });
+    const parsed = parseCsv(csv);
+    if (parsed.length < 2) return res.status(400).json({ error: 'CSV bevat geen gegevens.' });
+    const headers = parsed[0].map(h => String(h).trim().toLowerCase());
+    const idx = key => headers.indexOf(key);
+    const get = (r, key) => idx(key) >= 0 ? r[idx(key)] || '' : '';
+    const splitList = v => String(v || '').split('|').map(x => sanitizeText(x.trim(), 80)).filter(Boolean);
+    const existing = await readResponses();
+    const knownIds = new Set(existing.map(r => r.id));
+    let imported = 0;
+    for (const r of parsed.slice(1)) {
+      const name = sanitizeText(get(r, 'naam'), 80);
+      const className = sanitizeText(get(r, 'klas'), 40);
+      if (!name || !className) continue;
+      const id = sanitizeText(get(r, 'id'), 100) || crypto.randomUUID();
+      if (knownIds.has(id)) continue;
+      knownIds.add(id);
+      const record = {
+        id,name,className,
+        activities: splitList(get(r,'activiteiten')),foods: splitList(get(r,'eten')),music: splitList(get(r,'muziek')),extras: splitList(get(r,'extras')),
+        idea:sanitizeText(get(r,'eigen_idee'),500),dietary:sanitizeText(get(r,'dieet_allergie'),300),
+        device:{deviceType:sanitizeText(get(r,'device_type'),60),os:sanitizeText(get(r,'os'),100),browser:sanitizeText(get(r,'browser'),120),platform:sanitizeText(get(r,'platform'),100),screen:sanitizeText(get(r,'screen'),60),language:sanitizeText(get(r,'language'),60),timezone:sanitizeText(get(r,'timezone'),100),clientId:sanitizeText(get(r,'client_id'),100),userAgent:sanitizeText(get(r,'user_agent'),500)},
+        createdAt:(()=>{const d=new Date(get(r,'ingediend_op'));return Number.isNaN(d.getTime())?new Date().toISOString():d.toISOString()})()
+      };
+      await saveResponse(record); imported++;
+    }
+    res.json({ ok: true, imported, skipped: parsed.length - 1 - imported });
+  } catch (error) { res.status(503).json({ error: error.message || 'Import mislukt.' }); }
+});
+
+app.post('/api/admin/import.json', requireAdmin, express.text({ type: ['application/json','text/plain'], limit: '10mb' }), async (req, res) => {
+  try {
+    const parsed = JSON.parse(String(req.body || ''));
+    const incoming = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.responses) ? parsed.responses : []);
+    if (!incoming.length) return res.status(400).json({ error: 'JSON bevat geen inzendingen.' });
+    const existing = await readResponses();
+    const knownIds = new Set(existing.map(r => r.id));
+    let imported = 0;
+    for (const raw of incoming) {
+      const name = sanitizeText(raw.name,80), className=sanitizeText(raw.className,40);
+      if (!name || !className) continue;
+      const id = sanitizeText(raw.id,100) || crypto.randomUUID();
+      if (knownIds.has(id)) continue;
+      knownIds.add(id);
+      const record = {
+        id,name,className,
+        activities:sanitizeArray(raw.activities),foods:sanitizeArray(raw.foods),music:sanitizeArray(raw.music),extras:sanitizeArray(raw.extras),
+        idea:sanitizeText(raw.idea,500),dietary:sanitizeText(raw.dietary,300),
+        device: raw.device && typeof raw.device === 'object' ? Object.fromEntries(Object.entries(raw.device).map(([k,v])=>[sanitizeText(k,60),sanitizeText(v,500)])) : {},
+        createdAt:(()=>{const d=new Date(raw.createdAt);return Number.isNaN(d.getTime())?new Date().toISOString():d.toISOString()})()
+      };
+      await saveResponse(record); imported++;
+    }
+    res.json({ ok:true, imported, skipped: incoming.length-imported });
+  } catch (error) { res.status(400).json({ error: error.message || 'JSON import mislukt.' }); }
 });
 
 app.get('/admin', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'admin.html')));
 app.get('*', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'index.html')));
 
 if (require.main === module) {
-  ensureDataFile().then(() => {
+  ensureLocalDataFile().then(() => {
     app.listen(PORT, () => {
       console.log(`67school draait op http://localhost:${PORT}`);
-      if (ADMIN_PASSWORD === 'verander-dit-wachtwoord') {
-        console.warn('WAARSCHUWING: wijzig ADMIN_PASSWORD in .env voordat je de site publiek zet.');
-      }
+      console.log('Lokale opslag: data/responses.json');
+      if (!getAdminPassword()) console.warn('WAARSCHUWING: ADMIN_PASSWORD ontbreekt in .env.');
     });
   });
 }

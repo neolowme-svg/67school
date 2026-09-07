@@ -28,16 +28,24 @@
       <header class="admin-header glass">
         <div class="admin-brand"><img src="/assets/logo.png" alt="67school" /><div><b>67school</b><span>Live resultaten</span></div></div>
         <div class="live-pill"><i></i> LIVE</div>
-        <div class="header-actions"><a class="ghost small-btn" href="/api/admin/export.csv">CSV export</a><button id="logout" class="ghost small-btn">Uitloggen</button></div>
+        <div class="header-actions"><a class="ghost small-btn" href="/api/admin/export.csv">CSV export</a><a class="ghost small-btn" href="/api/admin/export.json">JSON export</a><label class="ghost small-btn" for="csvImport" style="cursor:pointer">CSV import</label><input id="csvImport" type="file" accept=".csv,text/csv" hidden><label class="ghost small-btn" for="jsonImport" style="cursor:pointer">JSON import</label><input id="jsonImport" type="file" accept=".json,application/json" hidden><button id="backupNow" class="ghost small-btn">Nu back-uppen</button><button id="logout" class="ghost small-btn">Uitloggen</button></div>
       </header>
 
-      <div id="passwordWarning" class="warning hidden">⚠️ Je gebruikt nog het standaard adminwachtwoord. Pas <code>ADMIN_PASSWORD</code> in <code>.env</code> aan voordat de website publiek staat.</div>
+      <div id="passwordWarning" class="warning hidden">⚠️ <code>ADMIN_PASSWORD</code> is niet ingesteld op deze deployment. Stel hem in bij Vercel Environment Variables en redeploy.</div>
 
       <section class="stats-grid">
         <article class="stat-card glass"><span>Totaal reacties</span><strong id="totalCount">0</strong><small id="filteredCount">0 zichtbaar</small></article>
         <article class="stat-card glass"><span>Vandaag</span><strong id="todayCount">0</strong><small>nieuwe reacties</small></article>
         <article class="stat-card glass"><span>Populairste activiteit</span><strong id="topActivity">–</strong><small id="topActivityCount">nog geen stemmen</small></article>
         <article class="stat-card glass"><span>Populairste eten</span><strong id="topFood">–</strong><small id="topFoodCount">nog geen stemmen</small></article>
+      </section>
+
+
+      <section class="stats-grid storage-grid">
+        <article class="stat-card glass"><span>Opslag</span><strong id="storageMode">–</strong><small>permanente opslag</small></article>
+        <article class="stat-card glass"><span>Reacties in opslag</span><strong id="storedCount">–</strong><small>losse veilige records</small></article>
+        <article class="stat-card glass"><span>Back-ups</span><strong id="backupCount">–</strong><small>automatische snapshots</small></article>
+        <article class="stat-card glass"><span>Back-up schema</span><strong id="cronState">–</strong><small>automatische JSON snapshot</small></article>
       </section>
 
       <section class="charts-grid">
@@ -48,8 +56,8 @@
       </section>
 
       <section class="panel glass responses-panel">
-        <div class="panel-title responsive"><div><p class="eyebrow">Inzendingen</p><h2>Alle reacties</h2></div><div class="filters"><input id="search" placeholder="Zoek op naam, klas of idee…" /><select id="classFilter"><option value="">Alle klassen</option></select></div></div>
-        <div class="table-wrap"><table><thead><tr><th>Naam</th><th>Klas</th><th>Activiteiten</th><th>Eten</th><th>Idee</th><th>Datum</th><th></th></tr></thead><tbody id="resultRows"></tbody></table></div>
+        <div class="panel-title responsive"><div><p class="eyebrow">Inzendingen</p><h2>Alle reacties</h2></div><div class="filters"><input id="search" placeholder="Zoek op naam, klas, idee of apparaatinfo…" /><select id="classFilter"><option value="">Alle klassen</option></select></div></div>
+        <div class="table-wrap"><table><thead><tr><th>Naam</th><th>Klas</th><th>Activiteiten</th><th>Eten</th><th>Idee</th><th>Apparaatinfo</th><th>Datum</th></tr></thead><tbody id="resultRows"></tbody></table></div>
         <div id="emptyState" class="empty hidden">Nog geen resultaten gevonden.</div>
       </section>
     </section>

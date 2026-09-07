@@ -1,48 +1,23 @@
-# 67school — Walewyc Mavo Schoolfeest
+# 67school — Walewyc Mavo schoolfeest
 
-Schoolfeest-vragenlijst voor 67school.site met een professioneel wit ontwerp, subtiele animaties, confetti-intro, lokale JSON-opslag en een live adminpaneel op `/admin`.
+Versie 2 gebruikt op Vercel **Private Blob** als permanente opslag. Elke inzending wordt als een eigen JSON-object opgeslagen, zodat gelijktijdige inzendingen elkaar niet kunnen overschrijven en een refresh geen antwoorden kan wissen.
 
-## Lokaal starten
+Daarnaast maakt de app **na iedere inzending** een volledige JSON-snapshot in `backups/`. Dat is voor een schoolvragenlijst veiliger dan alleen wachten op een timer: zodra een antwoord succesvol is opgeslagen, bestaat het zowel als individueel record als in een snapshot.
 
-```powershell
-cd C:\Users\neolo\Documents\dev\67school
-npm.cmd install
-notepad .env
-npm.cmd start
-```
+## Waarom geen `*/15` Vercel Cron in vercel.json?
 
-Open daarna `http://localhost:3000` en `http://localhost:3000/admin`.
+Vercel Hobby staat momenteel alleen dagelijkse native Cron-runs toe. Een 15-minutencron kan een Hobby deployment blokkeren. Daarom bevat deze versie bewust geen verplichte 15-minutencron. Op Pro kan `/api/cron/backup` desgewenst met `*/15 * * * *` worden gepland. Zonder extra dienst blijft de gratis/Hobby-versie toch duurzaam doordat elk antwoord direct permanent wordt opgeslagen en direct een snapshot triggert.
 
-## Omgevingsvariabelen
+## Admin
 
-Kopieer `.env.example` naar `.env` en verander minimaal:
+`/admin` bevat live resultaten, zoeken/filteren, technische browser-/apparaatinfo, opslagstatus, back-upstatus, CSV/JSON export en CSV/JSON import.
 
-```env
-PORT=3000
-ADMIN_PASSWORD=zet-hier-een-sterk-wachtwoord
-```
+De browser kan geen echte Windows/telefoon-apparaatnaam uitlezen. Er wordt alleen browser-beschikbare technische info verzameld; dit wordt zichtbaar vermeld op het formulier.
 
-## Opslag
+## Vercel
 
-Lokaal worden reacties opgeslagen in `data/responses.json`. Het adminpaneel ververst automatisch om de 2,5 seconden, dus nieuwe resultaten verschijnen zonder handmatig refreshen.
+1. Koppel een **Private Blob store** aan hetzelfde Vercel-project.
+2. Zet `ADMIN_PASSWORD` voor Production.
+3. Deploy opnieuw.
 
-### Belangrijk over Vercel
-
-Vercel gebruikt serverless functies en heeft **geen blijvende lokale schijf** voor dit soort JSON-opslag. De site kan op Vercel als preview draaien, maar reacties in de lokale JSON-database kunnen bij een nieuwe serverless instance of deployment verdwijnen. Voor echte blijvende resultaten heb je op Vercel een externe datastore nodig, of je host deze Node-app op een server met persistente schijfruimte.
-
-## GitHub
-
-Voer vanuit de projectmap uit:
-
-```powershell
-git init
-git add .
-git commit -m "Initial 67school website"
-git branch -M main
-git remote add origin https://github.com/JOUW-GITHUB-NAAM/67school.git
-git push -u origin main
-```
-
-Maak vóór de laatste twee opdrachten een lege GitHub repository met de naam `67school` en vervang `JOUW-GITHUB-NAAM` door je eigen GitHub-gebruikersnaam.
-
-`.env` staat in `.gitignore` en wordt dus niet naar GitHub gestuurd. Stel `ADMIN_PASSWORD` later als Environment Variable in bij je host.
+Lokaal gebruikt `npm start` nog `data/responses.json`.

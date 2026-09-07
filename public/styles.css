@@ -178,3 +178,4 @@ td{font-size:.86rem;color:var(--ink-soft)}
   .admin-logo{width:200px;height:132px}
 }
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
+.device-details{min-width:240px}.device-details summary{cursor:pointer;font-weight:700;color:var(--brand-dark);line-height:1.45}.device-grid{margin-top:8px;padding:10px;border-radius:10px;background:var(--surface-soft);display:grid;gap:5px;font-size:.74rem;max-width:420px;overflow-wrap:anywhere}.storage-grid .stat-card strong{font-size:1.35rem;white-space:normal}.header-actions{flex-wrap:wrap}
