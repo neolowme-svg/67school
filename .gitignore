@@ -4,3 +4,6 @@ npm-debug.log*
 data/responses.json
 data/*.tmp
 .vercel/
+
+.vercel
+.env*
