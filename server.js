@@ -46,6 +46,16 @@ function getCronSecret() {
   return String(process.env.CRON_SECRET || '').trim();
 }
 
+function getBlobToken() {
+  return String(process.env.BLOB_READ_WRITE_TOKEN || '').trim();
+}
+
+function blobAuthOptions(extra = {}) {
+  const token = getBlobToken();
+  if (!token) throw new Error('BLOB_READ_WRITE_TOKEN ontbreekt in Vercel.');
+  return { ...extra, token };
+}
+
 async function getBlobSdk() {
   if (!blobSdkPromise) blobSdkPromise = import('@vercel/blob');
   return blobSdkPromise;
@@ -129,7 +139,7 @@ async function writeLocalResponses(rows) {
 
 async function readBlobJson(pathname) {
   const { get } = await getBlobSdk();
-  const result = await get(pathname, { access: 'private', useCache: false });
+  const result = await get(pathname, blobAuthOptions({ access: 'private', useCache: false }));
   if (!result) return null;
   const text = await new Response(result.stream).text();
   return JSON.parse(text);
@@ -140,7 +150,7 @@ async function listBlobObjects(prefix) {
   const blobs = [];
   let cursor;
   do {
-    const page = await list({ prefix, limit: 1000, cursor });
+    const page = await list(blobAuthOptions({ prefix, limit: 1000, cursor }));
     blobs.push(...page.blobs);
     cursor = page.hasMore ? page.cursor : undefined;
   } while (cursor);
@@ -185,7 +195,7 @@ async function addTombstone(id) {
     return;
   }
   const { put } = await getBlobSdk();
-  await put(`${TOMBSTONE_PREFIX}${id}.json`, JSON.stringify({id,deletedAt:new Date().toISOString()}), {access:'private',contentType:'application/json',addRandomSuffix:false,allowOverwrite:true});
+  await put(`${TOMBSTONE_PREFIX}${id}.json`, JSON.stringify({id,deletedAt:new Date().toISOString()}), blobAuthOptions({access:'private',contentType:'application/json',addRandomSuffix:false,allowOverwrite:true}));
 }
 
 async function ensureSeedResponses() {
@@ -208,12 +218,12 @@ async function ensureSeedResponses() {
     if (existingIds.has(record.id) || deletedIds.has(record.id)) continue;
     const safeTime = String(record.createdAt || new Date().toISOString()).replace(/[:.]/g, '-');
     const pathname = `${RESPONSE_PREFIX}${safeTime}_${record.id}.json`;
-    await put(pathname, JSON.stringify(record, null, 2), { access: 'private', contentType: 'application/json', addRandomSuffix: false });
+    await put(pathname, JSON.stringify(record, null, 2), blobAuthOptions({ access: 'private', contentType: 'application/json', addRandomSuffix: false }));
     added++;
   }
   if (added) {
     const legacyBackup = { version:1, createdAt:new Date().toISOString(), reason:'hersteld-uit-67school-resultaten.csv', count:seeds.length, responses:seeds };
-    await put(`${BACKUP_PREFIX}legacy-import.json`, JSON.stringify(legacyBackup, null, 2), { access:'private', contentType:'application/json', addRandomSuffix:false, allowOverwrite:true });
+    await put(`${BACKUP_PREFIX}legacy-import.json`, JSON.stringify(legacyBackup, null, 2), blobAuthOptions({ access:'private', contentType:'application/json', addRandomSuffix:false, allowOverwrite:true }));
   }
   return added;
 }
@@ -240,11 +250,11 @@ async function saveResponse(record) {
     const { put } = await getBlobSdk();
     const safeTime = record.createdAt.replace(/[:.]/g, '-');
     const pathname = `${RESPONSE_PREFIX}${safeTime}_${record.id}.json`;
-    await put(pathname, JSON.stringify(record, null, 2), {
+    await put(pathname, JSON.stringify(record, null, 2), blobAuthOptions({
       access: 'private',
       contentType: 'application/json',
       addRandomSuffix: false
-    });
+    }));
   } catch (error) {
     console.error('Vercel Blob opslaan mislukt:', error);
     throw new Error('Opslaan is mislukt. Je antwoord is NIET bewaard; probeer opnieuw of meld dit bij de organisatie.');
@@ -264,7 +274,7 @@ async function deleteResponseById(id) {
   const blobs = await listBlobObjects(RESPONSE_PREFIX);
   const target = blobs.find(b => b.pathname.endsWith(`_${id}.json`));
   if (!target) return false;
-  await del(target.url || target.pathname);
+  await del(target.pathname, blobAuthOptions());
   await addTombstone(id);
   return true;
 }
@@ -317,8 +327,8 @@ async function createBackup(reason = 'manual') {
   const stamp = createdAt.replace(/[:.]/g, '-');
   const pathname = `${BACKUP_PREFIX}${stamp}.json`;
   const body = JSON.stringify(snapshot, null, 2);
-  await put(pathname, body, { access: 'private', contentType: 'application/json', addRandomSuffix: false });
-  await put(`${BACKUP_PREFIX}latest.json`, body, { access: 'private', contentType: 'application/json', addRandomSuffix: false, allowOverwrite: true });
+  await put(pathname, body, blobAuthOptions({ access: 'private', contentType: 'application/json', addRandomSuffix: false }));
+  await put(`${BACKUP_PREFIX}latest.json`, body, blobAuthOptions({ access: 'private', contentType: 'application/json', addRandomSuffix: false, allowOverwrite: true }));
   return { createdAt, count: rows.length, pathname };
 }
 
